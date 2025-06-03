@@ -1435,45 +1435,8 @@ def main():
                     
                     st.info("💡 The model achieves high accuracy by analyzing complex relationships between weather parameters and temporal patterns.")
                 
-                # Get historical data for context
-                with st.spinner("🔍 Loading historical wind data for context..."):
-                    historical_days = max(2, days)  # Get at least 2 days of history
-                    historical_data = get_weather_data(lat, lon, days=historical_days)
-                    
-                    # Create historical dataframe
-                    hist_df = pd.DataFrame({
-                        "Time": pd.to_datetime(historical_data['hourly']['time']),
-                        "Wind Speed (m/s)": historical_data['hourly']['wind_speed_10m'],
-                        "Wind Direction": historical_data['hourly']['wind_direction_10m'],
-                        "Temperature (°C)": historical_data['hourly']['temperature_2m'],
-                        "Humidity (%)": historical_data['hourly']['relative_humidity_2m'],
-                        "Pressure (hPa)": historical_data['hourly']['surface_pressure']
-                    })
-                    
-                    # Filter to only keep data before current time for historical context
-                    current_time = datetime.now()
-                    past_df = hist_df[hist_df['Time'] < current_time].copy()
-                    
-                    # Prepare current data (from main df)
-                    current_df = df[df['Time'] >= current_time].copy()
-                    
-                    # Combine past and current data
-                    combined_df = pd.concat([past_df, current_df])
-                    
-                    # Feature engineering for the model
-                    combined_df['hour'] = combined_df['Time'].dt.hour
-                    combined_df['hour_sin'] = np.sin(2 * np.pi * combined_df['hour']/24)
-                    combined_df['hour_cos'] = np.cos(2 * np.pi * combined_df['hour']/24)
-                    combined_df['day_of_week'] = combined_df['Time'].dt.dayofweek
-                    combined_df['day_of_year'] = combined_df['Time'].dt.dayofyear
-                    combined_df['month'] = combined_df['Time'].dt.month
-                    combined_df['wind_speed_lag1'] = combined_df['Wind Speed (m/s)'].shift(1)
-                    combined_df['wind_speed_lag2'] = combined_df['Wind Speed (m/s)'].shift(2)
-                    combined_df['wind_speed_lag3'] = combined_df['Wind Speed (m/s)'].shift(3)
-                    combined_df = combined_df.dropna()
-                
                 # Predict future wind speeds
-                last_data_point = combined_df.iloc[-1].to_dict()
+                last_data_point = df.iloc[-1].to_dict()
                 future_times, future_wind = predict_future_wind(model, features, last_data_point, future_hours)
                 
                 # Create prediction dataframe with confidence intervals
@@ -1484,34 +1447,39 @@ def main():
                     'Upper Bound': future_wind * 1.05   # 5% higher
                 })
                 
-                # Plot predictions with historical context
+                # Combine historical and predicted data for continuous plot
+                combined_df = pd.concat([
+                    df[['Time', 'Wind Speed (m/s)']].rename(columns={'Wind Speed (m/s)': 'Value'}),
+                    pred_df[['Time', 'Predicted Wind Speed (m/s)']].rename(columns={'Predicted Wind Speed (m/s)': 'Value'})
+                ])
+                
+                # Plot predictions with confidence band
                 fig = go.Figure()
                 
-                # Historical data (before current time)
+                # Historical data
                 fig.add_trace(go.Scatter(
-                    x=past_df['Time'], 
-                    y=past_df['Wind Speed (m/s)'], 
+                    x=df['Time'], 
+                    y=df['Wind Speed (m/s)'], 
                     name='Historical Data',
                     line=dict(color='#1f77b4')
                 ))
                 
-                # Current data (from forecast)
+                # Current to future prediction line
                 fig.add_trace(go.Scatter(
-                    x=current_df['Time'], 
-                    y=current_df['Wind Speed (m/s)'], 
-                    name='Current Forecast',
-                    line=dict(color='#2ca02c', width=2)
+                    x=combined_df['Time'],
+                    y=combined_df['Value'],
+                    name='Wind Speed',
+                    line=dict(color='#1f77b4'),
+                    showlegend=False
                 ))
                 
-                # Future predictions
+                # Future prediction with confidence
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Predicted Wind Speed (m/s)'],
                     name='Prediction',
                     line=dict(color='#ff7f0e', width=3)
                 ))
-                
-                # Confidence band
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Upper Bound'],
@@ -1529,9 +1497,9 @@ def main():
                     mode='lines'
                 ))
                 
-                # Add vertical line for current time
+                # Add vertical line to separate historical and predicted
                 fig.add_vline(
-                    x=current_time,
+                    x=df['Time'].iloc[-1],
                     line_dash="dash",
                     line_color="white",
                     annotation_text="Now",
@@ -1539,12 +1507,11 @@ def main():
                 )
                 
                 fig.update_layout(
-                    title=f"Wind Speed Timeline: History + {future_hours}h Forecast",
+                    title=f"Wind Speed Forecast - Past {days} Days + Next {future_hours} Hours",
                     xaxis_title="Time",
                     yaxis_title="Wind Speed (m/s)",
                     template="plotly_dark",
-                    hovermode="x unified",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                    hovermode="x unified"
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
