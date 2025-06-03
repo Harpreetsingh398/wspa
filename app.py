@@ -1444,7 +1444,7 @@ def main():
                     # Create historical dataframe
                     hist_df = pd.DataFrame({
                         "Time": pd.to_datetime(historical_data['hourly']['time']),
-                        "Actual Wind Speed (m/s)": historical_data['hourly']['wind_speed_10m'],
+                        "Wind Speed (m/s)": historical_data['hourly']['wind_speed_10m'],
                         "Wind Direction": historical_data['hourly']['wind_direction_10m'],
                         "Temperature (°C)": historical_data['hourly']['temperature_2m'],
                         "Humidity (%)": historical_data['hourly']['relative_humidity_2m'],
@@ -1458,14 +1458,14 @@ def main():
                     hist_df['day_of_week'] = hist_df['Time'].dt.dayofweek
                     hist_df['day_of_year'] = hist_df['Time'].dt.dayofyear
                     hist_df['month'] = hist_df['Time'].dt.month
-                    hist_df['wind_speed_lag1'] = hist_df['Actual Wind Speed (m/s)'].shift(1)
-                    hist_df['wind_speed_lag2'] = hist_df['Actual Wind Speed (m/s)'].shift(2)
-                    hist_df['wind_speed_lag3'] = hist_df['Actual Wind Speed (m/s)'].shift(3)
+                    hist_df['wind_speed_lag1'] = hist_df['Wind Speed (m/s)'].shift(1)
+                    hist_df['wind_speed_lag2'] = hist_df['Wind Speed (m/s)'].shift(2)
+                    hist_df['wind_speed_lag3'] = hist_df['Wind Speed (m/s)'].shift(3)
                     hist_df = hist_df.dropna()
                     
                     # Train the model on all historical data
                     X_train = hist_df[features]
-                    y_train = hist_df['Actual Wind Speed (m/s)']
+                    y_train = hist_df['Wind Speed (m/s)']
                     model.fit(X_train, y_train)
                     
                     # Get the last data point for prediction
@@ -1489,7 +1489,7 @@ def main():
                 # Add historical data (actual measurements)
                 fig.add_trace(go.Scatter(
                     x=hist_df['Time'], 
-                    y=hist_df['Actual Wind Speed (m/s)'], 
+                    y=hist_df['Wind Speed (m/s)'], 
                     name='Historical Data',
                     line=dict(color='#1f77b4', width=2)
                 ))
@@ -1584,7 +1584,7 @@ def main():
                 test_df['Predicted Wind Speed (m/s)'] = model.predict(X_test)
 
                 # Metrics calculation
-                y_test = test_df['Actual Wind Speed (m/s)']
+                y_test = test_df['Wind Speed (m/s)']
                 y_pred = test_df['Predicted Wind Speed (m/s)']
                 mae = np.mean(np.abs(y_test - y_pred))
                 rmse = np.sqrt(np.mean((y_test - y_pred)**2))
@@ -1623,7 +1623,7 @@ def main():
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=test_df['Time'],
-                        y=test_df['Actual Wind Speed (m/s)'],
+                        y=test_df['Wind Speed (m/s)'],
                         name='Actual Measurements',
                         line=dict(color='#636EFA', width=3)
                     ))
@@ -1646,12 +1646,12 @@ def main():
                 with tab2:
                     fig = px.scatter(
                         test_df,
-                        x='Actual Wind Speed (m/s)',
+                        x='Wind Speed (m/s)',
                         y='Predicted Wind Speed (m/s)',
                         trendline="ols",
                         title="Prediction Accuracy Analysis: Perfect predictions would lie on the diagonal",
                         labels={
-                            'Actual Wind Speed (m/s)': 'Measured Wind Speed (m/s)',
+                            'Wind Speed (m/s)': 'Measured Wind Speed (m/s)',
                             'Predicted Wind Speed (m/s)': 'Model Prediction (m/s)'
                         },
                         template="plotly_dark"
