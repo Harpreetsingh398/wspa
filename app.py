@@ -1435,56 +1435,32 @@ def main():
                     
                     st.info("💡 The model achieves high accuracy by analyzing complex relationships between weather parameters and temporal patterns.")
                 
-                # Get current date
-                current_date = datetime.now().date()
-                
-                # Split data into past, current and future
-                df['Date'] = df['Time'].dt.date
-                past_data = df[df['Date'] < current_date]
-                current_data = df[df['Date'] == current_date]
-                
                 # Predict future wind speeds
                 last_data_point = df.iloc[-1].to_dict()
                 future_times, future_wind = predict_future_wind(model, features, last_data_point, future_hours)
                 
-                # Create prediction dataframe
+                # Create prediction dataframe with confidence intervals
                 pred_df = pd.DataFrame({
-                    'Time': future_times[:future_hours],
-                    'Predicted Wind Speed (m/s)': future_wind[:future_hours],
-                    'Lower Bound': future_wind[:future_hours] * 0.95,
-                    'Upper Bound': future_wind[:future_hours] * 1.05
+                    'Time': future_times,
+                    'Predicted Wind Speed (m/s)': future_wind,
+                    'Lower Bound': future_wind * 0.95,  # 5% lower
+                    'Upper Bound': future_wind * 1.05   # 5% higher
                 })
                 
-                # Plot all three time periods
+                # Plot predictions with confidence band
                 fig = go.Figure()
-                
-                # Past data
-                if not past_data.empty:
-                    fig.add_trace(go.Scatter(
-                        x=past_data['Time'], 
-                        y=past_data['Wind Speed (m/s)'], 
-                        name='Past Data',
-                        line=dict(color='#636EFA'),
-                        opacity=0.7
-                    ))
-                
-                # Current data
                 fig.add_trace(go.Scatter(
-                    x=current_data['Time'],
-                    y=current_data['Wind Speed (m/s)'],
-                    name='Current Data',
-                    line=dict(color='#00CC96', width=3)
+                    x=df['Time'], 
+                    y=df['Wind Speed (m/s)'], 
+                    name='Historical Data',
+                    line=dict(color='#1f77b4')
                 ))
-                
-                # Future prediction
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Predicted Wind Speed (m/s)'],
-                    name='Future Prediction',
-                    line=dict(color='#FFA15A', width=3)
+                    name='Prediction',
+                    line=dict(color='#ff7f0e', width=3)
                 ))
-                
-                # Confidence interval
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Upper Bound'],
@@ -1496,32 +1472,181 @@ def main():
                     x=pred_df['Time'],
                     y=pred_df['Lower Bound'],
                     fill='tonexty',
-                    fillcolor='rgba(255,161,90,0.2)',
+                    fillcolor='rgba(255,127,14,0.2)',
                     line=dict(width=0),
                     name='Confidence Interval',
                     mode='lines'
                 ))
-                
                 fig.update_layout(
-                    title=f"Wind Speed Analysis: Past, Current and Next {future_hours} Hours Forecast",
+                    title=f"Wind Speed Forecast with Confidence Bands - Next {future_hours} hours",
                     xaxis_title="Time",
                     yaxis_title="Wind Speed (m/s)",
                     template="plotly_dark",
                     hovermode="x unified"
                 )
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # Show prediction metrics
+                avg_wind = pred_df['Predicted Wind Speed (m/s)'].mean()
+                max_wind = pred_df['Predicted Wind Speed (m/s)'].max()
+                
+                col1, col2 = st.columns(2)
+                col1.metric("Average Predicted Wind Speed", f"{avg_wind:.2f} m/s")
+                col2.metric("Maximum Predicted Wind Speed", f"{max_wind:.2f} m/s")
+                
+                # Show prediction data with expander
+                with st.expander("View Detailed Prediction Data"):
+                    st.dataframe(pred_df)
+
+                st.subheader("🔍 Wind Speed Prediction Validation: Model vs Reality")
+
+                # Explanation section with performance comparison focus
+                with st.expander("🔬 Model Performance Benchmark", expanded=True):
+                    st.markdown("""
+                    ### How Accurate Are Our Predictions?
+                    
+                    We rigorously test our model by comparing its predictions against actual observed wind speeds:
+                    
+                    **Validation Process**:
+                    1. Trained on 80% of historical weather data
+                    2. Tested on the most recent 20% of data
+                    3. Compared predictions against real measurements
+                    4. Calculated industry-standard accuracy metrics
+                    
+                    **Performance Indicators**:
+                    - 🎯 MAE: How close predictions are to reality (lower is better)
+                    - 📏 RMSE: How large prediction errors are (penalizes big mistakes)
+                    - 📊 R²: How well the model explains wind speed variations
+                    """)
+
+                st.info("💡 This validation uses the same model that powers our future predictions, ensuring reliable forecasts")
+
+                # Get historical data for validation
+                with st.spinner("🔍 Analyzing historical wind patterns..."):
+                    historical_data = get_weather_data(lat, lon, days=5)
+                    hist_df = pd.DataFrame({
+                        "Time": pd.to_datetime(historical_data['hourly']['time']),
+                        "Actual Wind Speed (m/s)": historical_data['hourly']['wind_speed_10m'],
+                        "Wind Direction": historical_data['hourly']['wind_direction_10m'],
+                        "Temperature (°C)": historical_data['hourly']['temperature_2m'],
+                        "Humidity (%)": historical_data['hourly']['relative_humidity_2m'],
+                        "Pressure (hPa)": historical_data['hourly']['surface_pressure']
+                    })
+                    
+                    # Feature engineering
+                    hist_df['hour'] = hist_df['Time'].dt.hour
+                    hist_df['hour_sin'] = np.sin(2 * np.pi * hist_df['hour']/24)
+                    hist_df['hour_cos'] = np.cos(2 * np.pi * hist_df['hour']/24)
+                    hist_df['day_of_week'] = hist_df['Time'].dt.dayofweek
+                    hist_df['day_of_year'] = hist_df['Time'].dt.dayofyear
+                    hist_df['month'] = hist_df['Time'].dt.month
+                    hist_df['wind_speed_lag1'] = hist_df['Actual Wind Speed (m/s)'].shift(1)
+                    hist_df['wind_speed_lag2'] = hist_df['Actual Wind Speed (m/s)'].shift(2)
+                    hist_df['wind_speed_lag3'] = hist_df['Actual Wind Speed (m/s)'].shift(3)
+                    hist_df = hist_df.dropna()
+                    
+                    # Train-test split (most recent 20% for testing)
+                    test_size = int(len(hist_df) * 0.2)
+                    train_df = hist_df.iloc[:-test_size]
+                    test_df = hist_df.iloc[-test_size:]
+                    
+                    # Model training
+                    X_train = train_df[features]
+                    y_train = train_df['Actual Wind Speed (m/s)']
+                    model.fit(X_train, y_train)
+                    
+                    # Make predictions
+                    X_test = test_df[features]
+                    test_df['Predicted Wind Speed (m/s)'] = model.predict(X_test)
+
+                # Metrics calculation
+                y_test = test_df['Actual Wind Speed (m/s)']
+                y_pred = test_df['Predicted Wind Speed (m/s)']
+                mae = np.mean(np.abs(y_test - y_pred))
+                rmse = np.sqrt(np.mean((y_test - y_pred)**2))
+                r2 = r2_score(y_test, y_pred)
+
+                # Performance comparison cards
+                st.subheader("📊 Model Performance Report Card")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Mean Absolute Error", 
+                            f"{mae:.2f} m/s", 
+                            help="Average prediction error magnitude",
+                            delta=f"{(mae/np.mean(y_test))*100:.1f}% of average wind speed",
+                            delta_color="inverse")
+                
+                with col2:
+                    st.metric("Root Mean Squared Error", 
+                            f"{rmse:.2f} m/s", 
+                            help="Standard deviation of prediction errors",
+                            delta=f"{(rmse/np.mean(y_test))*100:.1f}% of average wind speed",
+                            delta_color="inverse")
+                
+                with col3:
+                    st.metric("Model Accuracy (R²)", 
+                            f"{r2:.2f}", 
+                            help="Proportion of wind speed variance explained",
+                            delta=f"{(r2*100):.0f}% variance explained",
+                            delta_color="normal")
+
+                # Comparison visualization
+                st.subheader("🔄 Side-by-Side Comparison: Predictions vs Reality")
+                
+                tab1, tab2 = st.tabs(["📈 Time Series Comparison", "📊 Scatter Analysis"])
+                
+                with tab1:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=test_df['Time'],
+                        y=test_df['Actual Wind Speed (m/s)'],
+                        name='Actual Measurements',
+                        line=dict(color='#636EFA', width=3)
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=test_df['Time'],
+                        y=test_df['Predicted Wind Speed (m/s)'],
+                        name='Model Predictions',
+                        line=dict(color='#EF553B', width=2, dash='dot')
+                    ))
+                    fig.update_layout(
+                        title="Time Series Comparison: How Well Do Predictions Track Reality?",
+                        xaxis_title="Time",
+                        yaxis_title="Wind Speed (m/s)",
+                        template="plotly_dark",
+                        hovermode="x unified",
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with tab2:
+                    fig = px.scatter(
+                        test_df,
+                        x='Actual Wind Speed (m/s)',
+                        y='Predicted Wind Speed (m/s)',
+                        trendline="ols",
+                        title="Prediction Accuracy Analysis: Perfect predictions would lie on the diagonal",
+                        labels={
+                            'Actual Wind Speed (m/s)': 'Measured Wind Speed (m/s)',
+                            'Predicted Wind Speed (m/s)': 'Model Prediction (m/s)'
+                        },
+                        template="plotly_dark"
+                    )
+                    fig.add_shape(
+                        type="line",
+                        x0=min(y_test), y0=min(y_test),
+                        x1=max(y_test), y1=max(y_test),
+                        line=dict(color="#00CC96", width=3, dash="dash"),
+                        name="Perfect Prediction"
+                    )
+                    fig.update_traces(
+                        marker=dict(size=8, opacity=0.7, line=dict(width=1, color='DarkSlateGrey'))
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+ 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
 
 
