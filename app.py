@@ -1410,7 +1410,7 @@ def main():
 
             with tab4:
                 st.subheader("🔮 Advanced Wind Speed Prediction")
-
+            
                 with st.expander("📚 About Wind Speed Prediction Model", expanded=False):
                     st.markdown(f"""
                     ### Wind Speed Prediction Methodology
@@ -1473,14 +1473,14 @@ def main():
                     
                     # Predict future wind speeds
                     future_times = [last_data_point['Time'] + timedelta(hours=i) for i in range(1, future_hours+1)]
-                    future_wind = predict_future_wind(model, features, last_data_point, future_hours)
+                    _, future_wind = predict_future_wind(model, features, last_data_point, future_hours)
                     
                     # Create prediction dataframe with confidence intervals
                     pred_df = pd.DataFrame({
                         'Time': future_times,
                         'Predicted Wind Speed (m/s)': future_wind,
-                        'Lower Bound': future_wind * 0.95,  # 5% lower
-                        'Upper Bound': future_wind * 1.05   # 5% higher
+                        'Lower Bound': [x * 0.95 for x in future_wind],  # 5% lower
+                        'Upper Bound': [x * 1.05 for x in future_wind]   # 5% higher
                     })
                 
                 # Plot predictions with confidence band - continuous from past to future
@@ -1550,9 +1550,9 @@ def main():
                 # Show prediction data with expander
                 with st.expander("View Detailed Prediction Data"):
                     st.dataframe(pred_df)
-
+            
                 st.subheader("🔍 Wind Speed Prediction Validation: Model vs Reality")
-
+            
                 # Explanation section with performance comparison focus
                 with st.expander("🔬 Model Performance Benchmark", expanded=True):
                     st.markdown("""
@@ -1571,9 +1571,9 @@ def main():
                     - 📏 RMSE: How large prediction errors are (penalizes big mistakes)
                     - 📊 R²: How well the model explains wind speed variations
                     """)
-
+            
                 st.info("💡 This validation uses the same model that powers our future predictions, ensuring reliable forecasts")
-
+            
                 # Split data for validation (most recent 20% for testing)
                 test_size = int(len(hist_df) * 0.2)
                 train_df = hist_df.iloc[:-test_size]
@@ -1582,14 +1582,14 @@ def main():
                 # Make predictions on test set
                 X_test = test_df[features]
                 test_df['Predicted Wind Speed (m/s)'] = model.predict(X_test)
-
+            
                 # Metrics calculation
                 y_test = test_df['Wind Speed (m/s)']
                 y_pred = test_df['Predicted Wind Speed (m/s)']
                 mae = np.mean(np.abs(y_test - y_pred))
                 rmse = np.sqrt(np.mean((y_test - y_pred)**2))
                 r2 = r2_score(y_test, y_pred)
-
+            
                 # Performance comparison cards
                 st.subheader("📊 Model Performance Report Card")
                 col1, col2, col3 = st.columns(3)
@@ -1613,7 +1613,7 @@ def main():
                             help="Proportion of wind speed variance explained",
                             delta=f"{(r2*100):.0f}% variance explained",
                             delta_color="normal")
-
+            
                 # Comparison visualization
                 st.subheader("🔄 Side-by-Side Comparison: Predictions vs Reality")
                 
@@ -1642,7 +1642,7 @@ def main():
                         legend=dict(orientation="h", yanchor="bottom", y=1.02)
                     )
                     st.plotly_chart(fig, use_container_width=True)
-
+            
                 with tab2:
                     fig = px.scatter(
                         test_df,
