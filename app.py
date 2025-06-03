@@ -1410,7 +1410,7 @@ def main():
 
             with tab4:
                 st.subheader("🔮 Advanced Wind Speed Prediction")
-            
+
                 with st.expander("📚 About Wind Speed Prediction Model", expanded=False):
                     st.markdown(f"""
                     ### Wind Speed Prediction Methodology
@@ -1435,69 +1435,74 @@ def main():
                     
                     st.info("💡 The model achieves high accuracy by analyzing complex relationships between weather parameters and temporal patterns.")
                 
-                # Get historical data for context
-                historical_hours = 24  # Show 24 hours of historical data for context
-                historical_end = df['Time'].min()  # Get the earliest time in current data
-                historical_start = historical_end - pd.Timedelta(hours=historical_hours)
-                
-                # Get historical data
-                historical_data = get_weather_data(lat, lon, days=2)  # Get enough data to cover historical period
-                hist_df = pd.DataFrame({
-                    "Time": pd.to_datetime(historical_data['hourly']['time']),
-                    "Wind Speed (m/s)": historical_data['hourly']['wind_speed_10m'],
-                    "Wind Direction": historical_data['hourly']['wind_direction_10m'],
-                    "Temperature (°C)": historical_data['hourly']['temperature_2m'],
-                    "Humidity (%)": historical_data['hourly']['relative_humidity_2m'],
-                    "Pressure (hPa)": historical_data['hourly']['surface_pressure']
-                })
-                
-                # Filter to only show historical data before current forecast
-                past_df = hist_df[(hist_df['Time'] >= historical_start) & (hist_df['Time'] < historical_end)]
-                
                 # Predict future wind speeds
                 last_data_point = df.iloc[-1].to_dict()
+                future_times = [last_data_point['Time'] + timedelta(hours=i) for i in range(1, future_hours+1)]
                 
-                # Generate future timestamps correctly using pandas Timedelta
-                future_times = [last_data_point['Time'] + pd.Timedelta(hours=i) for i in range(1, future_hours+1)]
+                # Prepare prediction data
+                pred_data = []
+                for i, time in enumerate(future_times):
+                    # Use the last known wind speed values for lag features
+                    lag1 = last_data_point['Wind Speed (m/s)']
+                    lag2 = last_data_point['wind_speed_lag1'] if 'wind_speed_lag1' in last_data_point else lag1
+                    lag3 = last_data_point['wind_speed_lag2'] if 'wind_speed_lag2' in last_data_point else lag2
+                    
+                    row = {
+                        'hour_sin': np.sin(2 * np.pi * time.hour/24),
+                        'hour_cos': np.cos(2 * np.pi * time.hour/24),
+                        'day_of_week': time.weekday(),
+                        'day_of_year': time.timetuple().tm_yday,
+                        'month': time.month,
+                        'Temperature (°C)': last_data_point['Temperature (°C)'],
+                        'Humidity (%)': last_data_point['Humidity (%)'],
+                        'Pressure (hPa)': last_data_point['Pressure (hPa)'],
+                        'wind_speed_lag1': lag1,
+                        'wind_speed_lag2': lag2,
+                        'wind_speed_lag3': lag3
+                    }
+                    pred_data.append(row)
+                
+                # Convert to DataFrame and make predictions
+                pred_df = pd.DataFrame(pred_data)[features]
+                future_wind = model.predict(pred_df)
                 
                 # Create prediction dataframe with confidence intervals
                 pred_df = pd.DataFrame({
                     'Time': future_times,
-                    'Wind Speed (m/s)': future_wind,
+                    'Predicted Wind Speed (m/s)': future_wind,
                     'Lower Bound': future_wind * 0.95,  # 5% lower
                     'Upper Bound': future_wind * 1.05   # 5% higher
                 })
                 
-                # Plot predictions with confidence band
+                # Combine historical and predicted data
+                historical_df = df[['Time', 'Wind Speed (m/s)']].copy()
+                historical_df['Type'] = 'Historical'
+                predicted_df = pred_df[['Time', 'Predicted Wind Speed (m/s)']].copy()
+                predicted_df = predicted_df.rename(columns={'Predicted Wind Speed (m/s)': 'Wind Speed (m/s)'})
+                predicted_df['Type'] = 'Predicted'
+                
+                combined_df = pd.concat([historical_df, predicted_df])
+                
+                # Plot combined data
                 fig = go.Figure()
                 
-                # Add historical data
+                # Historical data
                 fig.add_trace(go.Scatter(
-                    x=past_df['Time'], 
-                    y=past_df['Wind Speed (m/s)'], 
+                    x=historical_df['Time'], 
+                    y=historical_df['Wind Speed (m/s)'], 
                     name='Historical Data',
-                    line=dict(color='#1f77b4'),
-                    mode='lines'
+                    line=dict(color='#1f77b4')
                 ))
                 
-                # Add current forecast data
-                fig.add_trace(go.Scatter(
-                    x=df['Time'], 
-                    y=df['Wind Speed (m/s)'], 
-                    name='Current Forecast',
-                    line=dict(color='#2ca02c'),
-                    mode='lines'
-                ))
-                
-                # Add future predictions
+                # Predicted data
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
-                    y=pred_df['Wind Speed (m/s)'],
-                    name=f'Future Prediction ({future_hours}h)',
+                    y=pred_df['Predicted Wind Speed (m/s)'],
+                    name='Prediction',
                     line=dict(color='#ff7f0e', width=3)
                 ))
                 
-                # Add confidence interval
+                # Confidence interval
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Upper Bound'],
@@ -1515,17 +1520,17 @@ def main():
                     mode='lines'
                 ))
                 
-                # Add vertical line to separate historical and forecast
+                # Add vertical line to separate historical and predicted data
                 fig.add_vline(
-                    x=historical_end,
+                    x=last_data_point['Time'],
                     line_dash="dash",
-                    line_color="red",
-                    annotation_text="Forecast Start",
-                    annotation_position="top right"
+                    line_color="white",
+                    annotation_text="Now",
+                    annotation_position="top left"
                 )
                 
                 fig.update_layout(
-                    title=f"Wind Speed Forecast Timeline - {future_hours} Hours Prediction",
+                    title=f"Wind Speed Forecast - Past, Present & Future ({future_hours}h Prediction)",
                     xaxis_title="Time",
                     yaxis_title="Wind Speed (m/s)",
                     template="plotly_dark",
@@ -1534,8 +1539,8 @@ def main():
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # Show prediction metrics
-                avg_wind = pred_df['Wind Speed (m/s)'].mean()
-                max_wind = pred_df['Wind Speed (m/s)'].max()
+                avg_wind = pred_df['Predicted Wind Speed (m/s)'].mean()
+                max_wind = pred_df['Predicted Wind Speed (m/s)'].max()
                 
                 col1, col2 = st.columns(2)
                 col1.metric("Average Predicted Wind Speed", f"{avg_wind:.2f} m/s")
@@ -1544,9 +1549,9 @@ def main():
                 # Show prediction data with expander
                 with st.expander("View Detailed Prediction Data"):
                     st.dataframe(pred_df)
-            
+
                 st.subheader("🔍 Wind Speed Prediction Validation: Model vs Reality")
-            
+
                 with st.expander("🔬 Model Performance Benchmark", expanded=True):
                     st.markdown("""
                     ### How Accurate Are Our Predictions?
@@ -1558,15 +1563,10 @@ def main():
                     2. Tested on the most recent 20% of data
                     3. Compared predictions against real measurements
                     4. Calculated industry-standard accuracy metrics
-                    
-                    **Performance Indicators**:
-                    - 🎯 MAE: How close predictions are to reality (lower is better)
-                    - 📏 RMSE: How large prediction errors are (penalizes big mistakes)
-                    - 📊 R²: How well the model explains wind speed variations
                     """)
-            
+
                 st.info("💡 This validation uses the same model that powers our future predictions, ensuring reliable forecasts")
-            
+
                 # Get historical data for validation
                 with st.spinner("🔍 Analyzing historical wind patterns..."):
                     historical_data = get_weather_data(lat, lon, days=5)
@@ -1604,14 +1604,14 @@ def main():
                     # Make predictions
                     X_test = test_df[features]
                     test_df['Predicted Wind Speed (m/s)'] = model.predict(X_test)
-            
+
                 # Metrics calculation
                 y_test = test_df['Actual Wind Speed (m/s)']
                 y_pred = test_df['Predicted Wind Speed (m/s)']
                 mae = np.mean(np.abs(y_test - y_pred))
                 rmse = np.sqrt(np.mean((y_test - y_pred)**2))
                 r2 = r2_score(y_test, y_pred)
-            
+
                 # Performance comparison cards
                 st.subheader("📊 Model Performance Report Card")
                 col1, col2, col3 = st.columns(3)
@@ -1635,7 +1635,7 @@ def main():
                             help="Proportion of wind speed variance explained",
                             delta=f"{(r2*100):.0f}% variance explained",
                             delta_color="normal")
-            
+
                 # Comparison visualization
                 st.subheader("🔄 Side-by-Side Comparison: Predictions vs Reality")
                 
@@ -1664,7 +1664,7 @@ def main():
                         legend=dict(orientation="h", yanchor="bottom", y=1.02)
                     )
                     st.plotly_chart(fig, use_container_width=True)
-            
+
                 with tab2:
                     fig = px.scatter(
                         test_df,
