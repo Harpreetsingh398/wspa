@@ -1436,9 +1436,12 @@ def main():
                     st.info("💡 The model achieves high accuracy by analyzing complex relationships between weather parameters and temporal patterns.")
                 
                 # Get historical data for context
-                historical_days = 1  # Show 1 day of historical data for context
-                historical_data = get_weather_data(lat, lon, days=historical_days)
+                historical_hours = 24  # Show 24 hours of historical data for context
+                historical_end = df['Time'].min()  # Get the earliest time in current data
+                historical_start = historical_end - pd.Timedelta(hours=historical_hours)
                 
+                # Get historical data
+                historical_data = get_weather_data(lat, lon, days=2)  # Get enough data to cover historical period
                 hist_df = pd.DataFrame({
                     "Time": pd.to_datetime(historical_data['hourly']['time']),
                     "Wind Speed (m/s)": historical_data['hourly']['wind_speed_10m'],
@@ -1448,13 +1451,14 @@ def main():
                     "Pressure (hPa)": historical_data['hourly']['surface_pressure']
                 })
                 
-                # Filter to only show past data (before current time)
-                current_time = datetime.now()
-                past_df = hist_df[hist_df['Time'] < current_time]
+                # Filter to only show historical data before current forecast
+                past_df = hist_df[(hist_df['Time'] >= historical_start) & (hist_df['Time'] < historical_end)]
                 
                 # Predict future wind speeds
                 last_data_point = df.iloc[-1].to_dict()
-                future_times, future_wind = predict_future_wind(model, features, last_data_point, future_hours)
+                
+                # Generate future timestamps correctly using pandas Timedelta
+                future_times = [last_data_point['Time'] + pd.Timedelta(hours=i) for i in range(1, future_hours+1)]
                 
                 # Create prediction dataframe with confidence intervals
                 pred_df = pd.DataFrame({
@@ -1463,13 +1467,6 @@ def main():
                     'Lower Bound': future_wind * 0.95,  # 5% lower
                     'Upper Bound': future_wind * 1.05   # 5% higher
                 })
-                
-                # Combine past, current and future data
-                combined_df = pd.concat([
-                    past_df[['Time', 'Wind Speed (m/s)']].rename(columns={'Wind Speed (m/s)': 'Historical'}),
-                    df[['Time', 'Wind Speed (m/s)']].rename(columns={'Wind Speed (m/s)': 'Current'}),
-                    pred_df[['Time', 'Wind Speed (m/s)']].rename(columns={'Wind Speed (m/s)': 'Forecast'})
-                ])
                 
                 # Plot predictions with confidence band
                 fig = go.Figure()
@@ -1496,7 +1493,7 @@ def main():
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Wind Speed (m/s)'],
-                    name='Future Prediction',
+                    name=f'Future Prediction ({future_hours}h)',
                     line=dict(color='#ff7f0e', width=3)
                 ))
                 
@@ -1518,12 +1515,12 @@ def main():
                     mode='lines'
                 ))
                 
-                # Add vertical line to separate past and future
+                # Add vertical line to separate historical and forecast
                 fig.add_vline(
-                    x=current_time,
+                    x=historical_end,
                     line_dash="dash",
                     line_color="red",
-                    annotation_text="Now",
+                    annotation_text="Forecast Start",
                     annotation_position="top right"
                 )
                 
