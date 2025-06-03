@@ -1464,89 +1464,92 @@ def main():
                     hist_df = hist_df.dropna()
                 
                 # Predict future wind speeds starting from current time
-                last_data_point = hist_df.iloc[-1].to_dict()
-                future_times, future_wind = predict_future_wind(model, features, last_data_point, future_hours)
-                
-                # Create prediction dataframe with confidence intervals
-                pred_df = pd.DataFrame({
-                    'Time': future_times,
-                    'Wind Speed (m/s)': future_wind,
-                    'Lower Bound': future_wind * 0.95,  # 5% lower
-                    'Upper Bound': future_wind * 1.05   # 5% higher
-                })
-                
-                # Combine historical and forecasted data
-                combined_df = pd.concat([
-                    hist_df[['Time', 'Wind Speed (m/s)']].rename(columns={'Wind Speed (m/s)': 'Wind Speed (m/s)'}),
-                    pred_df[['Time', 'Wind Speed (m/s)']]
-                ])
-                
-                # Plot combined historical + forecast data with confidence band
-                fig = go.Figure()
-                
-                # Historical data
-                fig.add_trace(go.Scatter(
-                    x=hist_df['Time'], 
-                    y=hist_df['Wind Speed (m/s)'], 
-                    name='Historical Data',
-                    line=dict(color='#1f77b4')
-                ))
-                
-                # Current to future forecast
-                fig.add_trace(go.Scatter(
-                    x=pred_df['Time'],
-                    y=pred_df['Wind Speed (m/s)'],
-                    name='Forecast',
-                    line=dict(color='#ff7f0e', width=3)
-                ))
-                
-                # Confidence interval
-                fig.add_trace(go.Scatter(
-                    x=pred_df['Time'],
-                    y=pred_df['Upper Bound'],
-                    line=dict(width=0),
-                    showlegend=False,
-                    mode='lines'
-                ))
-                fig.add_trace(go.Scatter(
-                    x=pred_df['Time'],
-                    y=pred_df['Lower Bound'],
-                    fill='tonexty',
-                    fillcolor='rgba(255,127,14,0.2)',
-                    line=dict(width=0),
-                    name='Confidence Interval',
-                    mode='lines'
-                ))
-                
-                # Add vertical line at current time
-                fig.add_vline(
-                    x=current_time,
-                    line_dash="dash",
-                    line_color="white",
-                    annotation_text="Current Time",
-                    annotation_position="top left"
-                )
-                
-                fig.update_layout(
-                    title=f"Wind Speed Forecast: Past {len(hist_df)} Hours + Next {future_hours} Hours",
-                    xaxis_title="Time",
-                    yaxis_title="Wind Speed (m/s)",
-                    template="plotly_dark",
-                    hovermode="x unified"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Show prediction metrics
-                avg_wind = pred_df['Wind Speed (m/s)'].mean()
-                max_wind = pred_df['Wind Speed (m/s)'].max()
-                
-                col1, col2 = st.columns(2)
-                col1.metric("Average Predicted Wind Speed", f"{avg_wind:.2f} m/s")
-                col2.metric("Maximum Predicted Wind Speed", f"{max_wind:.2f} m/s")
-                
-                # Show prediction data with expander
-                with st.expander("View Detailed Prediction Data"):
-                    st.dataframe(pred_df)
+                if not hist_df.empty:
+                    last_data_point = hist_df.iloc[-1].to_dict()
+                    future_times, future_wind = predict_future_wind(model, features, last_data_point, future_hours)
+                    
+                    # Create prediction dataframe with confidence intervals
+                    pred_df = pd.DataFrame({
+                        'Time': future_times,
+                        'Wind Speed (m/s)': future_wind,
+                        'Lower Bound': future_wind * 0.95,  # 5% lower
+                        'Upper Bound': future_wind * 1.05   # 5% higher
+                    })
+                    
+                    # Combine historical and forecasted data
+                    combined_df = pd.concat([
+                        hist_df[['Time', 'Wind Speed (m/s)']].rename(columns={'Wind Speed (m/s)': 'Wind Speed (m/s)'}),
+                        pred_df[['Time', 'Wind Speed (m/s)']]
+                    ])
+                    
+                    # Plot combined historical + forecast data with confidence band
+                    fig = go.Figure()
+                    
+                    # Historical data
+                    fig.add_trace(go.Scatter(
+                        x=hist_df['Time'], 
+                        y=hist_df['Wind Speed (m/s)'], 
+                        name='Historical Data',
+                        line=dict(color='#1f77b4')
+                    ))
+                    
+                    # Current to future forecast
+                    fig.add_trace(go.Scatter(
+                        x=pred_df['Time'],
+                        y=pred_df['Wind Speed (m/s)'],
+                        name='Forecast',
+                        line=dict(color='#ff7f0e', width=3)
+                    ))
+                    
+                    # Confidence interval
+                    fig.add_trace(go.Scatter(
+                        x=pred_df['Time'],
+                        y=pred_df['Upper Bound'],
+                        line=dict(width=0),
+                        showlegend=False,
+                        mode='lines'
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=pred_df['Time'],
+                        y=pred_df['Lower Bound'],
+                        fill='tonexty',
+                        fillcolor='rgba(255,127,14,0.2)',
+                        line=dict(width=0),
+                        name='Confidence Interval',
+                        mode='lines'
+                    ))
+                    
+                    # Add vertical line at current time - fixed the error here
+                    fig.add_vline(
+                        x=current_time.timestamp() * 1000,  # Convert to milliseconds
+                        line_dash="dash",
+                        line_color="white",
+                        annotation_text="Current Time",
+                        annotation_position="top left"
+                    )
+                    
+                    fig.update_layout(
+                        title=f"Wind Speed Forecast: Past {len(hist_df)} Hours + Next {future_hours} Hours",
+                        xaxis_title="Time",
+                        yaxis_title="Wind Speed (m/s)",
+                        template="plotly_dark",
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Show prediction metrics
+                    avg_wind = pred_df['Wind Speed (m/s)'].mean()
+                    max_wind = pred_df['Wind Speed (m/s)'].max()
+                    
+                    col1, col2 = st.columns(2)
+                    col1.metric("Average Predicted Wind Speed", f"{avg_wind:.2f} m/s")
+                    col2.metric("Maximum Predicted Wind Speed", f"{max_wind:.2f} m/s")
+                    
+                    # Show prediction data with expander
+                    with st.expander("View Detailed Prediction Data"):
+                        st.dataframe(pred_df)
+                else:
+                    st.warning("No historical data available to make predictions")
 
                 st.subheader("🔍 Wind Speed Prediction Validation: Model vs Reality")
 
@@ -1693,7 +1696,6 @@ def main():
                         marker=dict(size=8, opacity=0.7, line=dict(width=1, color='DarkSlateGrey'))
                     )
                     st.plotly_chart(fig, use_container_width=True)
-
  
 
 if __name__ == "__main__":
