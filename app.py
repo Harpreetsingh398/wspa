@@ -1435,32 +1435,39 @@ def main():
                     
                     st.info("💡 The model achieves high accuracy by analyzing complex relationships between weather parameters and temporal patterns.")
                 
-                # Predict future wind speeds
+                # Predict future wind speeds - modified to strictly respect selected hours
                 last_data_point = df.iloc[-1].to_dict()
                 future_times, future_wind = predict_future_wind(model, features, last_data_point, future_hours)
                 
                 # Create prediction dataframe with confidence intervals
                 pred_df = pd.DataFrame({
-                    'Time': future_times,
-                    'Predicted Wind Speed (m/s)': future_wind,
-                    'Lower Bound': future_wind * 0.95,  # 5% lower
-                    'Upper Bound': future_wind * 1.05   # 5% higher
+                    'Time': future_times[:future_hours],  # Strictly limit to selected hours
+                    'Predicted Wind Speed (m/s)': future_wind[:future_hours],
+                    'Lower Bound': future_wind[:future_hours] * 0.95,  # 5% lower
+                    'Upper Bound': future_wind[:future_hours] * 1.05   # 5% higher
                 })
                 
-                # Plot predictions with confidence band
+                # Plot predictions with confidence band - now shows past 24 hours + forecast
                 fig = go.Figure()
+                
+                # Show past 24 hours of actual data
+                past_data = df[df['Time'] >= (df['Time'].max() - timedelta(hours=24))]
                 fig.add_trace(go.Scatter(
-                    x=df['Time'], 
-                    y=df['Wind Speed (m/s)'], 
+                    x=past_data['Time'], 
+                    y=past_data['Wind Speed (m/s)'], 
                     name='Historical Data',
                     line=dict(color='#1f77b4')
                 ))
+                
+                # Add prediction trace
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Predicted Wind Speed (m/s)'],
                     name='Prediction',
                     line=dict(color='#ff7f0e', width=3)
                 ))
+                
+                # Add confidence interval
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Upper Bound'],
@@ -1477,8 +1484,9 @@ def main():
                     name='Confidence Interval',
                     mode='lines'
                 ))
+                
                 fig.update_layout(
-                    title=f"Wind Speed Forecast with Confidence Bands - Next {future_hours} hours",
+                    title=f"Wind Speed Forecast: Last 24 Hours + Next {future_hours} Hours",
                     xaxis_title="Time",
                     yaxis_title="Wind Speed (m/s)",
                     template="plotly_dark",
@@ -1500,7 +1508,6 @@ def main():
 
                 st.subheader("🔍 Wind Speed Prediction Validation: Model vs Reality")
 
-                # Explanation section with performance comparison focus
                 with st.expander("🔬 Model Performance Benchmark", expanded=True):
                     st.markdown("""
                     ### How Accurate Are Our Predictions?
@@ -1643,8 +1650,6 @@ def main():
                         marker=dict(size=8, opacity=0.7, line=dict(width=1, color='DarkSlateGrey'))
                     )
                     st.plotly_chart(fig, use_container_width=True)
-
- 
 
 if __name__ == "__main__":
     main()
