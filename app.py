@@ -824,10 +824,6 @@
 #     main()
 
 
-
-
-
-
 import streamlit as st
 import requests
 import pandas as pd
@@ -1414,7 +1410,7 @@ def main():
 
             with tab4:
                 st.subheader("🔮 Advanced Wind Speed Prediction")
-            
+
                 with st.expander("📚 About Wind Speed Prediction Model", expanded=False):
                     st.markdown(f"""
                     ### Wind Speed Prediction Methodology
@@ -1451,31 +1447,20 @@ def main():
                     'Upper Bound': future_wind * 1.05   # 5% higher
                 })
                 
-                # Prepare historical data for display - show last 24 hours before prediction
-                historical_display_hours = 24
-                start_time = df['Time'].iloc[-1] - timedelta(hours=historical_display_hours)
-                display_hist_df = df[df['Time'] >= start_time].copy()
-                
-                # Plot predictions with confidence band and historical context
+                # Plot predictions with confidence band
                 fig = go.Figure()
-                
-                # Historical data
                 fig.add_trace(go.Scatter(
-                    x=display_hist_df['Time'], 
-                    y=display_hist_df['Wind Speed (m/s)'], 
+                    x=df['Time'], 
+                    y=df['Wind Speed (m/s)'], 
                     name='Historical Data',
-                    line=dict(color='#1f77b4', width=3)
+                    line=dict(color='#1f77b4')
                 ))
-                
-                # Prediction line
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Predicted Wind Speed (m/s)'],
                     name='Prediction',
                     line=dict(color='#ff7f0e', width=3)
                 ))
-                
-                # Confidence band
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Upper Bound'],
@@ -1489,26 +1474,15 @@ def main():
                     fill='tonexty',
                     fillcolor='rgba(255,127,14,0.2)',
                     line=dict(width=0),
-                    name=f'{future_hours}h Forecast Range',
+                    name='Confidence Interval',
                     mode='lines'
                 ))
-                
-                # Add vertical line to separate history and prediction
-                fig.add_vline(
-                    x=df['Time'].iloc[-1],
-                    line_dash="dash",
-                    line_color="white",
-                    annotation_text="Now",
-                    annotation_position="top left"
-                )
-                
                 fig.update_layout(
-                    title=f"Wind Speed Forecast: {historical_display_hours}h History + {future_hours}h Prediction",
+                    title=f"Wind Speed Forecast with Confidence Bands - Next {future_hours} hours",
                     xaxis_title="Time",
                     yaxis_title="Wind Speed (m/s)",
                     template="plotly_dark",
-                    hovermode="x unified",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    hovermode="x unified"
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
@@ -1523,9 +1497,9 @@ def main():
                 # Show prediction data with expander
                 with st.expander("View Detailed Prediction Data"):
                     st.dataframe(pred_df)
-            
+
                 st.subheader("🔍 Wind Speed Prediction Validation: Model vs Reality")
-            
+
                 # Explanation section with performance comparison focus
                 with st.expander("🔬 Model Performance Benchmark", expanded=True):
                     st.markdown("""
@@ -1544,9 +1518,9 @@ def main():
                     - 📏 RMSE: How large prediction errors are (penalizes big mistakes)
                     - 📊 R²: How well the model explains wind speed variations
                     """)
-            
+
                 st.info("💡 This validation uses the same model that powers our future predictions, ensuring reliable forecasts")
-            
+
                 # Get historical data for validation
                 with st.spinner("🔍 Analyzing historical wind patterns..."):
                     historical_data = get_weather_data(lat, lon, days=5)
@@ -1584,14 +1558,14 @@ def main():
                     # Make predictions
                     X_test = test_df[features]
                     test_df['Predicted Wind Speed (m/s)'] = model.predict(X_test)
-            
+
                 # Metrics calculation
                 y_test = test_df['Actual Wind Speed (m/s)']
                 y_pred = test_df['Predicted Wind Speed (m/s)']
                 mae = np.mean(np.abs(y_test - y_pred))
                 rmse = np.sqrt(np.mean((y_test - y_pred)**2))
                 r2 = r2_score(y_test, y_pred)
-            
+
                 # Performance comparison cards
                 st.subheader("📊 Model Performance Report Card")
                 col1, col2, col3 = st.columns(3)
@@ -1615,7 +1589,7 @@ def main():
                             help="Proportion of wind speed variance explained",
                             delta=f"{(r2*100):.0f}% variance explained",
                             delta_color="normal")
-            
+
                 # Comparison visualization
                 st.subheader("🔄 Side-by-Side Comparison: Predictions vs Reality")
                 
@@ -1644,7 +1618,7 @@ def main():
                         legend=dict(orientation="h", yanchor="bottom", y=1.02)
                     )
                     st.plotly_chart(fig, use_container_width=True)
-            
+
                 with tab2:
                     fig = px.scatter(
                         test_df,
@@ -1674,4 +1648,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
+
 
