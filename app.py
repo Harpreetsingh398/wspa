@@ -1437,34 +1437,16 @@ def main():
                 
                 # Predict future wind speeds
                 last_data_point = df.iloc[-1].to_dict()
-                future_times = [last_data_point['Time'] + timedelta(hours=i) for i in range(1, future_hours+1)]
                 
-                # Prepare prediction data
-                pred_data = []
-                for i, time in enumerate(future_times):
-                    # Use the last known wind speed values for lag features
-                    lag1 = last_data_point['Wind Speed (m/s)']
-                    lag2 = last_data_point['wind_speed_lag1'] if 'wind_speed_lag1' in last_data_point else lag1
-                    lag3 = last_data_point['wind_speed_lag2'] if 'wind_speed_lag2' in last_data_point else lag2
-                    
-                    row = {
-                        'hour_sin': np.sin(2 * np.pi * time.hour/24),
-                        'hour_cos': np.cos(2 * np.pi * time.hour/24),
-                        'day_of_week': time.weekday(),
-                        'day_of_year': time.timetuple().tm_yday,
-                        'month': time.month,
-                        'Temperature (°C)': last_data_point['Temperature (°C)'],
-                        'Humidity (%)': last_data_point['Humidity (%)'],
-                        'Pressure (hPa)': last_data_point['Pressure (hPa)'],
-                        'wind_speed_lag1': lag1,
-                        'wind_speed_lag2': lag2,
-                        'wind_speed_lag3': lag3
-                    }
-                    pred_data.append(row)
+                # Generate future timestamps correctly
+                last_time = df['Time'].iloc[-1]
+                future_times = pd.date_range(
+                    start=last_time + pd.Timedelta(hours=1),
+                    periods=future_hours,
+                    freq='H'
+                )
                 
-                # Convert to DataFrame and make predictions
-                pred_df = pd.DataFrame(pred_data)[features]
-                future_wind = model.predict(pred_df)
+                future_wind = predict_future_wind(model, features, last_data_point, future_hours)[1]
                 
                 # Create prediction dataframe with confidence intervals
                 pred_df = pd.DataFrame({
@@ -1475,26 +1457,23 @@ def main():
                 })
                 
                 # Combine historical and predicted data
-                historical_df = df[['Time', 'Wind Speed (m/s)']].copy()
-                historical_df['Type'] = 'Historical'
-                predicted_df = pred_df[['Time', 'Predicted Wind Speed (m/s)']].copy()
-                predicted_df = predicted_df.rename(columns={'Predicted Wind Speed (m/s)': 'Wind Speed (m/s)'})
-                predicted_df['Type'] = 'Predicted'
+                combined_df = pd.concat([
+                    df[['Time', 'Wind Speed (m/s)']].rename(columns={'Wind Speed (m/s)': 'Value'}),
+                    pred_df[['Time', 'Predicted Wind Speed (m/s)']].rename(columns={'Predicted Wind Speed (m/s)': 'Value'})
+                ])
                 
-                combined_df = pd.concat([historical_df, predicted_df])
-                
-                # Plot combined data
+                # Plot predictions with confidence band
                 fig = go.Figure()
                 
                 # Historical data
                 fig.add_trace(go.Scatter(
-                    x=historical_df['Time'], 
-                    y=historical_df['Wind Speed (m/s)'], 
+                    x=df['Time'], 
+                    y=df['Wind Speed (m/s)'], 
                     name='Historical Data',
                     line=dict(color='#1f77b4')
                 ))
                 
-                # Predicted data
+                # Prediction line
                 fig.add_trace(go.Scatter(
                     x=pred_df['Time'],
                     y=pred_df['Predicted Wind Speed (m/s)'],
@@ -1520,17 +1499,17 @@ def main():
                     mode='lines'
                 ))
                 
-                # Add vertical line to separate historical and predicted data
+                # Add vertical line separating history and prediction
                 fig.add_vline(
-                    x=last_data_point['Time'],
+                    x=last_time,
                     line_dash="dash",
-                    line_color="white",
-                    annotation_text="Now",
+                    line_color="green",
+                    annotation_text="Prediction Start",
                     annotation_position="top left"
                 )
                 
                 fig.update_layout(
-                    title=f"Wind Speed Forecast - Past, Present & Future ({future_hours}h Prediction)",
+                    title=f"Wind Speed Forecast - Last {len(df)} Hours + Next {future_hours} Hours Prediction",
                     xaxis_title="Time",
                     yaxis_title="Wind Speed (m/s)",
                     template="plotly_dark",
@@ -1552,6 +1531,7 @@ def main():
 
                 st.subheader("🔍 Wind Speed Prediction Validation: Model vs Reality")
 
+                # Explanation section with performance comparison focus
                 with st.expander("🔬 Model Performance Benchmark", expanded=True):
                     st.markdown("""
                     ### How Accurate Are Our Predictions?
@@ -1563,6 +1543,11 @@ def main():
                     2. Tested on the most recent 20% of data
                     3. Compared predictions against real measurements
                     4. Calculated industry-standard accuracy metrics
+                    
+                    **Performance Indicators**:
+                    - 🎯 MAE: How close predictions are to reality (lower is better)
+                    - 📏 RMSE: How large prediction errors are (penalizes big mistakes)
+                    - 📊 R²: How well the model explains wind speed variations
                     """)
 
                 st.info("💡 This validation uses the same model that powers our future predictions, ensuring reliable forecasts")
